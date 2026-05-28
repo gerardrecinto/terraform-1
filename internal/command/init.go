@@ -164,7 +164,7 @@ func (c *InitCommand) initBackend(ctx context.Context, root *configs.Module, ini
 	defer span.End()
 
 	if root.StateStore != nil {
-		view.Output(views.InitializingStateStoreMessage)
+		view.Output(views.InitializingStateStoreMessage, root.StateStore.Type)
 	} else {
 		view.Output(views.InitializingBackendMessage)
 	}
@@ -373,7 +373,7 @@ func (c *InitCommand) getProvidersFromPSSConfig(ctx context.Context, config *con
 		return false, nil, SafeInitActionNotRelevant, nil, diags
 	}
 
-	ctx, span := tracer.Start(ctx, "install providers from config")
+	ctx, span := tracer.Start(ctx, "install providers for state store")
 	defer span.End()
 
 	// Dev overrides and unmanaged providers change the installation process in "terraform init";
@@ -454,7 +454,7 @@ func (c *InitCommand) getProvidersFromPSSConfig(ctx context.Context, config *con
 	var stateStoreProviderAuthResult *getproviders.PackageAuthenticationResult
 	evts := &providercache.InstallerEvents{
 		PendingProviders: func(reqs map[addrs.Provider]getproviders.VersionConstraints) {
-			view.Output(views.InitializingProviderPluginFromConfigMessage) // Message is specific to provider download from config
+			view.Output(views.InitializingStateStoreProviderPluginMessage, config.Module.StateStore.Type)
 		},
 		ProviderAlreadyInstalled: providerAlreadyInstalledCallback(view),
 		BuiltInProviderAvailable: builtInProviderAvailableCallback(view),
@@ -540,7 +540,7 @@ func (c *InitCommand) getProvidersFromPSSConfig(ctx context.Context, config *con
 			// * It was already present from a previous installation.
 			// * If upgrading, no newer version was available that matched version constraints.
 			// * Or, the provider is unmanaged/reattached and so download was skipped.
-			log.Printf("[TRACE] init (getProvidersFromConfig): the state storage provider %s (%q) will not be changed in the dependency lock file after provider installation. Either it was already present and/or there was no available upgrade version that matched version constraints.", config.Module.StateStore.ProviderAddr.Type, config.Module.StateStore.ProviderAddr)
+			log.Printf("[TRACE] init (getProvidersFromPSSConfig): the state storage provider %s (%q) will not be changed in the dependency lock file after provider installation. Either it was already present and/or there was no available upgrade version that matched version constraints.", config.Module.StateStore.ProviderAddr.Type, config.Module.StateStore.ProviderAddr)
 			safeInitAction = SafeInitActionProceed
 		} else {
 			// The provider was processed in the FetchPackageBegin callback, so either it's being downloaded for the first time, or upgraded.
@@ -570,7 +570,7 @@ func (c *InitCommand) getProvidersFromPSSConfig(ctx context.Context, config *con
 // The calling code is assumed to have already called getProvidersFromConfig, which is used to
 // supply the configLocks argument.
 // The dependency lock file itself isn't updated here.
-func (c *InitCommand) getProviders(ctx context.Context, config *configs.Config, state *states.State, configLocks *depsfile.Locks, pluginDirs []string, view views.Init) (output bool, resultingLocks *depsfile.Locks, diags tfdiags.Diagnostics) {
+func (c *InitCommand) getProviders(ctx context.Context, config *configs.Config, state *states.State, upgrade bool, configLocks *depsfile.Locks, pluginDirs []string, view views.Init) (output bool, resultingLocks *depsfile.Locks, diags tfdiags.Diagnostics) {
 	ctx, span := tracer.Start(ctx, "install providers")
 	defer span.End()
 
@@ -646,14 +646,14 @@ func (c *InitCommand) getProviders(ctx context.Context, config *configs.Config, 
 	// are shimming our vt100 output to the legacy console API on Windows.
 	evts := &providercache.InstallerEvents{
 		PendingProviders: func(reqs map[addrs.Provider]getproviders.VersionConstraints) {
-			view.Output(views.InitializingProviderPluginFromStateMessage) // Message is specific to provider download from state
+			view.Output(views.InitializingProviderPluginMessage)
 		},
 		ProviderAlreadyInstalled: providerAlreadyInstalledCallback(view),
 		BuiltInProviderAvailable: builtInProviderAvailableCallback(view),
 		BuiltInProviderFailure:   builtInProviderFailureCallback(&diags),
 		QueryPackagesBegin: func(provider addrs.Provider, versionConstraints getproviders.VersionConstraints, locked bool) {
 			if locked {
-				view.LogInitMessage(views.ReusingVersionIdentifiedFromConfig, provider.ForDisplay()) // Message is specific to provider download from state
+				view.LogInitMessage(views.ReusingVersionIdentifiedFromConfig, provider.ForDisplay())
 			} else {
 				if len(versionConstraints) > 0 {
 					view.LogInitMessage(views.FindingMatchingVersionMessage, provider.ForDisplay(), getproviders.VersionConstraintsString(versionConstraints))
@@ -675,6 +675,9 @@ func (c *InitCommand) getProviders(ctx context.Context, config *configs.Config, 
 	ctx = evts.OnContext(ctx)
 
 	mode := providercache.InstallNewProvidersOnly
+	if upgrade {
+		mode = providercache.InstallUpgrades
+	}
 
 	// We don't handle upgrade flags here, i.e. what happens at this point in getProvidersFromConfig:
 	// > We cannot upgrade a provider used only by the state, as there are no version constraints in state.

@@ -136,8 +136,8 @@ func TestInit_two_step_provider_download(t *testing.T) {
 			expectedDownloadMsgs: []string{
 				views.MessageRegistry[views.OutputInitSuccessCLIMessage].JSONValue,
 				`Initializing the backend...
-				Successfully configured the backend \"local\"!`, // No providers found in the configuration so next output is backend-related
-				`Initializing provider plugins found in the state...
+				Successfully configured the backend "local"!`, // No providers found in the configuration so next output is backend-related
+				`Initializing provider plugins...
 				- Finding latest version of hashicorp/random...
 				- Installing hashicorp/random v9.9.9...`, // The latest version is expected, as state has no version constraints
 			},
@@ -146,89 +146,65 @@ func TestInit_two_step_provider_download(t *testing.T) {
 			workDirPath: "init-provider-download/config-and-state-different-providers",
 			expectedDownloadMsgs: []string{
 				views.MessageRegistry[views.OutputInitSuccessCLIMessage].JSONValue,
-
-				// Config - this provider is affected by a version constraint
-				`Initializing provider plugins found in the configuration...
-				- Finding hashicorp/null versions matching "< 9.0.0"...
-				- Installing hashicorp/null v1.0.0...
-				- Installed hashicorp/null v1.0.0`,
-
-				// State - the latest version of this provider is expected, as state has no version constraints
-				`Initializing provider plugins found in the state...
-				- Finding latest version of hashicorp/random...
-				- Installing hashicorp/random v9.9.9...`,
+				"Initializing provider plugins...",
+				// Config - null provider is affected by a version constraint
+				`- Finding hashicorp/null versions matching "< 9.0.0"...`,
+				`- Installing hashicorp/null v1.0.0...
+            	- Installed hashicorp/null v1.0.0`,
+				// State - the latest version of random provider is expected, as state has no version constraints
+				`- Finding latest version of hashicorp/random...`,
+				`- Installing hashicorp/random v9.9.9...
+	            - Installed hashicorp/random v9.9.9`,
 			},
 		},
 		"does not re-download providers that are present in both config and state": {
 			workDirPath: "init-provider-download/config-and-state-same-providers",
 			expectedDownloadMsgs: []string{
-				// Config
-				`Initializing provider plugins found in the configuration...
-				- Finding hashicorp/random versions matching "< 9.0.0"...
-				- Installing hashicorp/random v1.0.0...
-				- Installed hashicorp/random v1.0.0`,
-				// State
-				`Initializing provider plugins found in the state...
-				- Reusing previous version of hashicorp/random
-				- Using previously-installed hashicorp/random v1.0.0`,
+				`Initializing provider plugins...
+	            - Finding hashicorp/random versions matching "< 9.0.0"...
+	            - Installing hashicorp/random v1.0.0...
+	            - Installed hashicorp/random v1.0.0`,
 			},
 		},
 		"reuses providers already represented in a dependency lock file": {
 			workDirPath: "init-provider-download/config-state-file-and-lockfile",
 			expectedDownloadMsgs: []string{
-				// Config
-				`Initializing provider plugins found in the configuration...
-				- Reusing previous version of hashicorp/random from the dependency lock file
+				// " from the dependency lock file" is actually missing
+				`Initializing provider plugins...
+				- Reusing previous version of hashicorp/random
 				- Installing hashicorp/random v1.0.0...
 				- Installed hashicorp/random v1.0.0`,
-				// State
-				`Initializing provider plugins found in the state...
-				- Reusing previous version of hashicorp/random
-				- Using previously-installed hashicorp/random v1.0.0`,
 			},
 		},
 		"using the -upgrade flag causes provider download to ignore the lock file": {
 			workDirPath: "init-provider-download/config-state-file-and-lockfile",
 			flags:       []string{"-upgrade"},
 			expectedDownloadMsgs: []string{
-				// Config - lock file is not mentioned due to the -upgrade flag
-				`Initializing provider plugins found in the configuration...
+				// lock file is not mentioned due to the -upgrade flag
+				`Initializing provider plugins...
 				- Finding hashicorp/random versions matching "< 9.0.0"...
-				- Installing hashicorp/random v1.0.0...
-				- Installed hashicorp/random v1.0.0`,
-				// State - reuses the provider download from the config
-				`Initializing provider plugins found in the state...
-				- Reusing previous version of hashicorp/random
-				- Using previously-installed hashicorp/random v1.0.0`,
+	            - Installing hashicorp/random v1.0.0...
+	            - Installed hashicorp/random v1.0.0`,
 			},
 		},
 		// Same as some tests above, but now the version constraint in config specifies a pre-release
 		"pre-release not re-downloaded if present in both config and state": {
 			workDirPath: "init-provider-download-prerelease/config-and-state-same-providers",
 			expectedDownloadMsgs: []string{
-				// Config
-				`Initializing provider plugins found in the configuration...
-				- Finding hashicorp/random versions matching "1.2.3-beta"...
-				- Installing hashicorp/random v1.2.3-beta...
-				- Installed hashicorp/random v1.2.3-beta`,
-				// State
-				`Initializing provider plugins found in the state...
-				- Reusing previous version of hashicorp/random
-				- Using previously-installed hashicorp/random v1.2.3-beta`,
+				`Initializing provider plugins...
+	            - Finding hashicorp/random versions matching "1.2.3-beta"...
+	            - Installing hashicorp/random v1.2.3-beta...
+	            - Installed hashicorp/random v1.2.3-beta (verified checksum)`,
 			},
 		},
 		"reuses pre-release provider already represented in a dependency lock file": {
 			workDirPath: "init-provider-download-prerelease/config-state-file-and-lockfile",
 			expectedDownloadMsgs: []string{
-				// Config
-				`Initializing provider plugins found in the configuration...
-				- Reusing previous version of hashicorp/random from the dependency lock file
+				// " from the dependency lock file" is actually missing
+				`Initializing provider plugins...
+				- Reusing previous version of hashicorp/random
 				- Installing hashicorp/random v1.2.3-beta...
 				- Installed hashicorp/random v1.2.3-beta`,
-				// State
-				`Initializing provider plugins found in the state...
-				- Reusing previous version of hashicorp/random
-				- Using previously-installed hashicorp/random v1.2.3-beta`,
 			},
 		},
 	}
@@ -262,10 +238,10 @@ func TestInit_two_step_provider_download(t *testing.T) {
 				t.Fatalf("bad: \n%s", done(t).All())
 			}
 
-			actual := cleanString(done(t).All())
+			actual := done(t).All()
 			for _, downloadMsg := range tc.expectedDownloadMsgs {
 				if !strings.Contains(cleanString(actual), cleanString(downloadMsg)) {
-					t.Fatalf("expected output to contain %q\n, got %q", cleanString(downloadMsg), cleanString(actual))
+					t.Fatalf("expected output to contain %q\n, got:\n%s", cleanString(downloadMsg), actual)
 				}
 			}
 		})
@@ -2492,21 +2468,21 @@ func TestInit_getUpgradePlugins(t *testing.T) {
 
 		// Configuration uses a state store and has other provider requirements.
 		cfg := `
-terraform {
+	terraform {
 
-  required_providers {
-    test = {
-      source  = "hashicorp/test"
-      version = "> 1.0.0"
-    }
-  }
-  state_store "test_store" {
-    provider "test" {
-    }
+	  required_providers {
+	    test = {
+	      source  = "hashicorp/test"
+	      version = "> 1.0.0"
+	    }
+	  }
+	  state_store "test_store" {
+	    provider "test" {
+	    }
 
-    value = "foobar"
-  }
-}`
+	    value = "foobar"
+	  }
+	}`
 		if err := os.WriteFile("main.tf", []byte(cfg), 0644); err != nil {
 			t.Fatalf("failed to write main.tf: %s", err)
 		}
@@ -2623,21 +2599,21 @@ terraform {
 
 		// Configuration uses a state store and has other provider requirements.
 		cfg := `
-terraform {
+	terraform {
 
-  required_providers {
-    test = {
-      source  = "hashicorp/test"
-      version = "> 1.0.0"
-    }
-  }
-  state_store "test_store" {
-    provider "test" {
-    }
+	  required_providers {
+	    test = {
+	      source  = "hashicorp/test"
+	      version = "> 1.0.0"
+	    }
+	  }
+	  state_store "test_store" {
+	    provider "test" {
+	    }
 
-    value = "foobar"
-  }
-}`
+	    value = "foobar"
+	  }
+	}`
 		if err := os.WriteFile("main.tf", []byte(cfg), 0644); err != nil {
 			t.Fatalf("failed to write main.tf: %s", err)
 		}
@@ -2747,21 +2723,21 @@ terraform {
 
 		// Configuration uses a state store and has other provider requirements.
 		cfg := `
-terraform {
+	terraform {
 
-  required_providers {
-    test = {
-      source  = "hashicorp/test"
-      version = "> 1.0.0"
-    }
-  }
-  state_store "test_store" {
-    provider "test" {
-    }
+	  required_providers {
+	    test = {
+	      source  = "hashicorp/test"
+	      version = "> 1.0.0"
+	    }
+	  }
+	  state_store "test_store" {
+	    provider "test" {
+	    }
 
-    value = "foobar"
-  }
-}`
+	    value = "foobar"
+	  }
+	}`
 		if err := os.WriteFile("main.tf", []byte(cfg), 0644); err != nil {
 			t.Fatalf("failed to write main.tf: %s", err)
 		}
@@ -2935,7 +2911,7 @@ terraform {
 			getproviders.MustParseVersion("1.2.3"),
 			getproviders.MustParseVersionConstraints("> 1.0.0"),
 			[]getproviders.Hash{
-				getproviders.HashScheme1.New("wlbEC2mChQZ2hhgUhl6SeVLPP7fMqOFUZAQhQ9GIIno="),
+				getproviders.HashScheme1.New("z1PjPOAuP6c16GKfaCTIJwj95cZ9PrOiREixVFeLZYA="),
 			},
 		)
 		if err := depsfile.SaveLocksToFile(locks, ".terraform.lock.hcl"); err != nil {
@@ -4081,12 +4057,20 @@ func TestInit_stateStore_newWorkingDir_basic(t *testing.T) {
 		// Check output
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
-			"Terraform has been successfully initialized!",
+			`Initializing provider plugin for state store "test_store"...
+- Finding hashicorp/test versions matching "~> 1.0"...
+- Installing hashicorp/test v1.2.3...
+- Installed hashicorp/test v1.2.3 (verified checksum)
+
+Initializing the state store "test_store"...
+
+Initializing provider plugins...
+- Reusing previous version of hashicorp/test
+- Using previously-installed hashicorp/test v1.2.3`,
 		}
 		for _, expected := range expectedOutputs {
 			if !strings.Contains(output, expected) {
-				t.Fatalf("expected output to include %q, but got':\n %s", expected, output)
+				t.Fatalf("expected output to include %q, but got:\n%s", expected, output)
 			}
 		}
 
@@ -4374,7 +4358,7 @@ func TestInit_stateStore_newWorkingDir_interactiveProviderApproval(t *testing.T)
 		// Check output
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"Terraform has been successfully initialized!",
 		}
 		for _, expected := range expectedOutputs {
@@ -4441,7 +4425,7 @@ func TestInit_stateStore_newWorkingDir_interactiveProviderApproval(t *testing.T)
 		// Check output via view
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"The state store provider was approved",
 			"Terraform has been successfully initialized!",
 		}
@@ -4523,7 +4507,7 @@ func TestInit_stateStore_newWorkingDir_interactiveProviderApproval(t *testing.T)
 		// Check output via view
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"The state store provider was approved",
 			"Terraform has been successfully initialized!",
 		}
@@ -4724,7 +4708,7 @@ func TestInit_stateStore_newWorkingDir_interactiveProviderApproval(t *testing.T)
 		}
 		output = testOutput.All()
 		expectedOutputs = []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"The state store provider was approved",
 			"Terraform has been successfully initialized!",
 		}
@@ -4783,7 +4767,7 @@ func TestInit_stateStore_newWorkingDir_inAutomationProviderApproval(t *testing.T
 		// Check output
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"Terraform has been successfully initialized!",
 		}
 		for _, expected := range expectedOutputs {
@@ -4863,7 +4847,7 @@ func TestInit_stateStore_newWorkingDir_inAutomationProviderApproval(t *testing.T
 		// Check output via view
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"The state store provider was approved automatically",
 			"Terraform has been successfully initialized!",
 		}
@@ -4949,7 +4933,7 @@ func TestInit_stateStore_newWorkingDir_inAutomationProviderApproval(t *testing.T
 		// Check output via view
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"The state store provider was approved automatically",
 			"Terraform has been successfully initialized!",
 		}
@@ -5195,7 +5179,7 @@ func TestInit_stateStore_reconfigureLeadingToMigrationOfLocalState(t *testing.T)
 	// Check output
 	output := testOutput.All()
 	expectedOutputs := []string{
-		"Initializing the state store...",
+		`Initializing the state store "test_store"...`,
 		"Terraform has been successfully initialized!",
 	}
 	for _, expected := range expectedOutputs {
@@ -5296,7 +5280,7 @@ func TestInit_stateStore_configUnchanged(t *testing.T) {
 		// Check output
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"Terraform has been successfully initialized!",
 		}
 		for _, expected := range expectedOutputs {
@@ -5367,7 +5351,7 @@ func TestInit_stateStore_configChanges(t *testing.T) {
 		// Check output
 		output := testOutput.All()
 		expectedOutputs := []string{
-			"Initializing the state store...",
+			`Initializing the state store "test_store"...`,
 			"Terraform has been successfully initialized!",
 		}
 		for _, expected := range expectedOutputs {
@@ -5461,7 +5445,7 @@ func TestInit_stateStore_configChanges(t *testing.T) {
 
 		// When -backend=false the backend/state store isn't initialized, so we don't expect this
 		// output if the flag has the expected effect on Terraform.
-		unexpectedOutput := "Initializing the state store..."
+		unexpectedOutput := `Initializing the state store "test_store"...`
 		if strings.Contains(output, unexpectedOutput) {
 			t.Fatalf("output included %q, which is unexpected if -backend=false is behaving correctly':\n %s", unexpectedOutput, output)
 		}
